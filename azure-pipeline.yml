@@ -1,0 +1,15 @@
+# Pipeline principal — referencia CI e CD separados
+# CI: azure-pipelines-ci.yml
+# CD: azure-pipelines-cd.yml
+
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - script: echo "Ver azure-pipelines-ci.yml e azure-pipelines-cd.yml"
+    displayName: 'BoneGuard DevOps GS'

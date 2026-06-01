@@ -1,0 +1,81 @@
+trigger: none
+
+resources:
+  pipelines:
+    - pipeline: BoneGuard-CI
+      source: BoneGuard-CI
+      branch: main
+      trigger:
+        branches:
+          include:
+            - main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  - group: boneguard-secrets
+
+stages:
+  - stage: CD_Deploy
+    displayName: Deploy - Produção
+    jobs:
+      - deployment: Deploy_BoneGuard
+        displayName: Deploy boneguard-service no Azure Web App
+        environment: production
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: BoneGuard-CI
+                  artifact: boneguard-app
+                  displayName: Download artifact boneguard-app
+
+                - task: AzureWebApp@1
+                  displayName: Deploy boneguard-service (Java 17)
+                  inputs:
+                    azureSubscription: $(AZURE_SUBSCRIPTION)
+                    appName: $(BONEGUARD_WEBAPP_NAME)
+                    appType: webAppLinux
+                    runtimeStack: JAVA|17-java17
+                    package: $(Pipeline.Workspace)/BoneGuard-CI/boneguard-app/boneguard-service-*.jar
+                    appSettings: >-
+                      -DATASOURCE_URL "$(DATASOURCE_URL)"
+                      -DB_USERNAME "$(DB_USERNAME)"
+                      -DB_PASSWORD "$(DB_PASSWORD)"
+                      -JWT_SECRET "$(JWT_SECRET)"
+                      -JWT_EXPIRATION_MS "$(JWT_EXPIRATION_MS)"
+                      -RABBITMQ_HOST "$(RABBITMQ_HOST)"
+                      -RABBITMQ_PORT "$(RABBITMQ_PORT)"
+                      -RABBITMQ_USER "$(RABBITMQ_USER)"
+                      -RABBITMQ_PASS "$(RABBITMQ_PASS)"
+                      -GROQ_API_KEY "$(GROQ_API_KEY)"
+                      -SPRING_PROFILES_ACTIVE "production"
+
+      - deployment: Deploy_Notification
+        displayName: Deploy notification-service no Azure Web App
+        environment: production
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: BoneGuard-CI
+                  artifact: notification-app
+                  displayName: Download artifact notification-app
+
+                - task: AzureWebApp@1
+                  displayName: Deploy notification-service (Java 17)
+                  inputs:
+                    azureSubscription: $(AZURE_SUBSCRIPTION)
+                    appName: $(NOTIFICATION_WEBAPP_NAME)
+                    appType: webAppLinux
+                    runtimeStack: JAVA|17-java17
+                    package: $(Pipeline.Workspace)/BoneGuard-CI/notification-app/notification-service-*.jar
+                    appSettings: >-
+                      -DATASOURCE_URL "$(DATASOURCE_URL)"
+                      -DB_USERNAME "$(DB_USERNAME)"
+                      -DB_PASSWORD "$(DB_PASSWORD)"
+                      -RABBITMQ_HOST "$(RABBITMQ_HOST)"
+                      -RABBITMQ_PORT "$(RABBITMQ_PORT)"
+                      -RABBITMQ_USER "$(RABBITMQ_USER)"
+                      -RABBITMQ_PASS "$(RABBITMQ_PASS)"
