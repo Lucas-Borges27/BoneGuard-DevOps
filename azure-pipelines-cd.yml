@@ -31,6 +31,19 @@ stages:
                   artifact: boneguard-app
                   displayName: Download artifact boneguard-app
 
+                - task: AzureCLI@2
+                  displayName: Criar Web App boneguard se não existir
+                  inputs:
+                    azureSubscription: $(AZURE_SUBSCRIPTION)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      az webapp create \
+                        --resource-group $(RESOURCE_GROUP) \
+                        --plan $(APP_SERVICE_PLAN) \
+                        --name $(BONEGUARD_WEBAPP_NAME) \
+                        --runtime "JAVA:17-java17" 2>/dev/null || echo "Web App já existe"
+
                 - task: AzureWebApp@1
                   displayName: Deploy boneguard-service (Java 17)
                   inputs:
@@ -62,6 +75,19 @@ stages:
                 - download: BoneGuard-CI
                   artifact: notification-app
                   displayName: Download artifact notification-app
+
+                - task: AzureCLI@2
+                  displayName: Criar Web App notification se não existir
+                  inputs:
+                    azureSubscription: $(AZURE_SUBSCRIPTION)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      az webapp create \
+                        --resource-group $(RESOURCE_GROUP) \
+                        --plan $(APP_SERVICE_PLAN) \
+                        --name $(NOTIFICATION_WEBAPP_NAME) \
+                        --runtime "JAVA:17-java17" 2>/dev/null || echo "Web App já existe"
 
                 - task: AzureWebApp@1
                   displayName: Deploy notification-service (Java 17)
