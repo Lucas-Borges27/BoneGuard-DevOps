@@ -49,6 +49,7 @@ stages:
                   inputs:
                     azureSubscription: $(AZURE_SUBSCRIPTION)
                     appName: $(BONEGUARD_WEBAPP_NAME)
+                    resourceGroupName: $(RESOURCE_GROUP)
                     appType: webAppLinux
                     runtimeStack: JAVA|17-java17
                     package: $(Pipeline.Workspace)/BoneGuard-CI/boneguard-app/boneguard-service-*.jar
@@ -94,6 +95,7 @@ stages:
                   inputs:
                     azureSubscription: $(AZURE_SUBSCRIPTION)
                     appName: $(NOTIFICATION_WEBAPP_NAME)
+                    resourceGroupName: $(RESOURCE_GROUP)
                     appType: webAppLinux
                     runtimeStack: JAVA|17-java17
                     package: $(Pipeline.Workspace)/BoneGuard-CI/notification-app/notification-service-*.jar
