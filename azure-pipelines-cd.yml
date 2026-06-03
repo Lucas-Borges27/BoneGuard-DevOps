@@ -32,17 +32,47 @@ stages:
                   displayName: Download artifact boneguard-app
 
                 - task: AzureCLI@2
-                  displayName: Criar Web App boneguard se não existir
+                  displayName: Criar App Service Plan e Web App boneguard
                   inputs:
                     azureSubscription: $(AZURE_SUBSCRIPTION)
                     scriptType: bash
                     scriptLocation: inlineScript
                     inlineScript: |
-                      az webapp create \
+                      set -e
+
+                      echo "==> Verificando/criando App Service Plan: $(APP_SERVICE_PLAN)"
+                      PLAN_EXISTS=$(az appservice plan list \
                         --resource-group $(RESOURCE_GROUP) \
-                        --plan $(APP_SERVICE_PLAN) \
-                        --name $(BONEGUARD_WEBAPP_NAME) \
-                        --runtime "JAVA:17-java17" 2>/dev/null || echo "Web App já existe"
+                        --query "[?name=='$(APP_SERVICE_PLAN)'] | length(@)" \
+                        --output tsv)
+
+                      if [ "$PLAN_EXISTS" = "0" ]; then
+                        az appservice plan create \
+                          --name $(APP_SERVICE_PLAN) \
+                          --resource-group $(RESOURCE_GROUP) \
+                          --sku B1 \
+                          --is-linux
+                        echo "==> Plan criado."
+                      else
+                        echo "==> Plan já existe, pulando."
+                      fi
+
+                      echo "==> Verificando/criando Web App: $(BONEGUARD_WEBAPP_NAME)"
+                      APP_EXISTS=$(az webapp list \
+                        --resource-group $(RESOURCE_GROUP) \
+                        --query "[?name=='$(BONEGUARD_WEBAPP_NAME)'] | length(@)" \
+                        --output tsv)
+
+                      if [ "$APP_EXISTS" = "0" ]; then
+                        az webapp create \
+                          --resource-group $(RESOURCE_GROUP) \
+                          --plan $(APP_SERVICE_PLAN) \
+                          --name $(BONEGUARD_WEBAPP_NAME) \
+                          --runtime "JAVA:17-java17"
+                        echo "==> Web App criada."
+                      else
+                        echo "==> Web App já existe, pulando."
+                      fi
 
                 - task: AzureWebApp@1
                   displayName: Deploy boneguard-service (Java 17)
@@ -63,6 +93,7 @@ stages:
                       -RABBITMQ_PORT "$(RABBITMQ_PORT)"
                       -RABBITMQ_USER "$(RABBITMQ_USER)"
                       -RABBITMQ_PASS "$(RABBITMQ_PASS)"
+                      -RABBITMQ_VHOST "$(RABBITMQ_VHOST)"
                       -GROQ_API_KEY "$(GROQ_API_KEY)"
                       -SPRING_PROFILES_ACTIVE "production"
 
@@ -78,17 +109,30 @@ stages:
                   displayName: Download artifact notification-app
 
                 - task: AzureCLI@2
-                  displayName: Criar Web App notification se não existir
+                  displayName: Criar Web App notification (reusa plan)
                   inputs:
                     azureSubscription: $(AZURE_SUBSCRIPTION)
                     scriptType: bash
                     scriptLocation: inlineScript
                     inlineScript: |
-                      az webapp create \
+                      set -e
+
+                      echo "==> Verificando/criando Web App: $(NOTIFICATION_WEBAPP_NAME)"
+                      APP_EXISTS=$(az webapp list \
                         --resource-group $(RESOURCE_GROUP) \
-                        --plan $(APP_SERVICE_PLAN) \
-                        --name $(NOTIFICATION_WEBAPP_NAME) \
-                        --runtime "JAVA:17-java17" 2>/dev/null || echo "Web App já existe"
+                        --query "[?name=='$(NOTIFICATION_WEBAPP_NAME)'] | length(@)" \
+                        --output tsv)
+
+                      if [ "$APP_EXISTS" = "0" ]; then
+                        az webapp create \
+                          --resource-group $(RESOURCE_GROUP) \
+                          --plan $(APP_SERVICE_PLAN) \
+                          --name $(NOTIFICATION_WEBAPP_NAME) \
+                          --runtime "JAVA:17-java17"
+                        echo "==> Web App criada."
+                      else
+                        echo "==> Web App já existe, pulando."
+                      fi
 
                 - task: AzureWebApp@1
                   displayName: Deploy notification-service (Java 17)
@@ -107,3 +151,5 @@ stages:
                       -RABBITMQ_PORT "$(RABBITMQ_PORT)"
                       -RABBITMQ_USER "$(RABBITMQ_USER)"
                       -RABBITMQ_PASS "$(RABBITMQ_PASS)"
+                      -RABBITMQ_VHOST "$(RABBITMQ_VHOST)"
+                      -SPRING_PROFILES_ACTIVE "production"
