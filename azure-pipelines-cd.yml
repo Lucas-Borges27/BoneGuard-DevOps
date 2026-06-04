@@ -17,8 +17,103 @@ variables:
   - group: boneguard-secrets
 
 stages:
+  - stage: CD_Infra
+    displayName: Infraestrutura - Resource Group, Plan e Web Apps
+    jobs:
+      - job: Provisionar_Infra
+        displayName: Criar RG, App Service Plan e Web Apps
+        steps:
+          - task: AzureCLI@2
+            displayName: Garantir Resource Group existe
+            inputs:
+              azureSubscription: $(AZURE_SUBSCRIPTION)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -e
+                echo "==> Verificando/criando Resource Group: $(RESOURCE_GROUP)"
+                RG_EXISTS=$(az group exists --name $(RESOURCE_GROUP))
+                if [ "$RG_EXISTS" = "false" ]; then
+                  az group create \
+                    --name $(RESOURCE_GROUP) \
+                    --location $(LOCATION)
+                  echo "==> Resource Group criado."
+                else
+                  echo "==> Resource Group já existe, pulando."
+                fi
+
+          - task: AzureCLI@2
+            displayName: Criar App Service Plan
+            inputs:
+              azureSubscription: $(AZURE_SUBSCRIPTION)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -e
+                echo "==> Verificando/criando App Service Plan: $(APP_SERVICE_PLAN)"
+                PLAN_EXISTS=$(az appservice plan list \
+                  --resource-group $(RESOURCE_GROUP) \
+                  --query "[?name=='$(APP_SERVICE_PLAN)'] | length(@)" \
+                  --output tsv)
+
+                if [ "$PLAN_EXISTS" = "0" ]; then
+                  az appservice plan create \
+                    --name $(APP_SERVICE_PLAN) \
+                    --resource-group $(RESOURCE_GROUP) \
+                    --sku B1 \
+                    --is-linux \
+                    --location $(LOCATION)
+                  echo "==> Plan criado."
+                else
+                  echo "==> Plan já existe, pulando."
+                fi
+
+          - task: AzureCLI@2
+            displayName: Criar Web Apps (boneguard e notification)
+            inputs:
+              azureSubscription: $(AZURE_SUBSCRIPTION)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -e
+
+                echo "==> Verificando/criando Web App: $(BONEGUARD_WEBAPP_NAME)"
+                APP_EXISTS=$(az webapp list \
+                  --resource-group $(RESOURCE_GROUP) \
+                  --query "[?name=='$(BONEGUARD_WEBAPP_NAME)'] | length(@)" \
+                  --output tsv)
+
+                if [ "$APP_EXISTS" = "0" ]; then
+                  az webapp create \
+                    --resource-group $(RESOURCE_GROUP) \
+                    --plan $(APP_SERVICE_PLAN) \
+                    --name $(BONEGUARD_WEBAPP_NAME) \
+                    --runtime "JAVA:17-java17"
+                  echo "==> Web App boneguard criada."
+                else
+                  echo "==> Web App boneguard já existe, pulando."
+                fi
+
+                echo "==> Verificando/criando Web App: $(NOTIFICATION_WEBAPP_NAME)"
+                APP_EXISTS=$(az webapp list \
+                  --resource-group $(RESOURCE_GROUP) \
+                  --query "[?name=='$(NOTIFICATION_WEBAPP_NAME)'] | length(@)" \
+                  --output tsv)
+
+                if [ "$APP_EXISTS" = "0" ]; then
+                  az webapp create \
+                    --resource-group $(RESOURCE_GROUP) \
+                    --plan $(APP_SERVICE_PLAN) \
+                    --name $(NOTIFICATION_WEBAPP_NAME) \
+                    --runtime "JAVA:17-java17"
+                  echo "==> Web App notification criada."
+                else
+                  echo "==> Web App notification já existe, pulando."
+                fi
+
   - stage: CD_Deploy
     displayName: Deploy - Produção
+    dependsOn: CD_Infra
     jobs:
       - deployment: Deploy_BoneGuard
         displayName: Deploy boneguard-service no Azure Web App
@@ -30,69 +125,6 @@ stages:
                 - download: BoneGuard-CI
                   artifact: boneguard-app
                   displayName: Download artifact boneguard-app
-
-                - task: AzureCLI@2
-                  displayName: Garantir Resource Group existe
-                  inputs:
-                    azureSubscription: $(AZURE_SUBSCRIPTION)
-                    scriptType: bash
-                    scriptLocation: inlineScript
-                    inlineScript: |
-                      set -e
-                      echo "==> Verificando/criando Resource Group: $(RESOURCE_GROUP)"
-                      RG_EXISTS=$(az group exists --name $(RESOURCE_GROUP))
-                      if [ "$RG_EXISTS" = "false" ]; then
-                        az group create \
-                          --name $(RESOURCE_GROUP) \
-                          --location $(LOCATION)
-                        echo "==> Resource Group criado."
-                      else
-                        echo "==> Resource Group já existe, pulando."
-                      fi
-
-                - task: AzureCLI@2
-                  displayName: Criar App Service Plan e Web App boneguard
-                  inputs:
-                    azureSubscription: $(AZURE_SUBSCRIPTION)
-                    scriptType: bash
-                    scriptLocation: inlineScript
-                    inlineScript: |
-                      set -e
-
-                      echo "==> Verificando/criando App Service Plan: $(APP_SERVICE_PLAN)"
-                      PLAN_EXISTS=$(az appservice plan list \
-                        --resource-group $(RESOURCE_GROUP) \
-                        --query "[?name=='$(APP_SERVICE_PLAN)'] | length(@)" \
-                        --output tsv)
-
-                      if [ "$PLAN_EXISTS" = "0" ]; then
-                        az appservice plan create \
-                          --name $(APP_SERVICE_PLAN) \
-                          --resource-group $(RESOURCE_GROUP) \
-                          --sku B1 \
-                          --is-linux \
-                          --location $(LOCATION)
-                        echo "==> Plan criado."
-                      else
-                        echo "==> Plan já existe, pulando."
-                      fi
-
-                      echo "==> Verificando/criando Web App: $(BONEGUARD_WEBAPP_NAME)"
-                      APP_EXISTS=$(az webapp list \
-                        --resource-group $(RESOURCE_GROUP) \
-                        --query "[?name=='$(BONEGUARD_WEBAPP_NAME)'] | length(@)" \
-                        --output tsv)
-
-                      if [ "$APP_EXISTS" = "0" ]; then
-                        az webapp create \
-                          --resource-group $(RESOURCE_GROUP) \
-                          --plan $(APP_SERVICE_PLAN) \
-                          --name $(BONEGUARD_WEBAPP_NAME) \
-                          --runtime "JAVA:17-java17"
-                        echo "==> Web App criada."
-                      else
-                        echo "==> Web App já existe, pulando."
-                      fi
 
                 - task: AzureWebApp@1
                   displayName: Deploy boneguard-service (Java 17)
@@ -127,32 +159,6 @@ stages:
                 - download: BoneGuard-CI
                   artifact: notification-app
                   displayName: Download artifact notification-app
-
-                - task: AzureCLI@2
-                  displayName: Criar Web App notification (reusa plan)
-                  inputs:
-                    azureSubscription: $(AZURE_SUBSCRIPTION)
-                    scriptType: bash
-                    scriptLocation: inlineScript
-                    inlineScript: |
-                      set -e
-
-                      echo "==> Verificando/criando Web App: $(NOTIFICATION_WEBAPP_NAME)"
-                      APP_EXISTS=$(az webapp list \
-                        --resource-group $(RESOURCE_GROUP) \
-                        --query "[?name=='$(NOTIFICATION_WEBAPP_NAME)'] | length(@)" \
-                        --output tsv)
-
-                      if [ "$APP_EXISTS" = "0" ]; then
-                        az webapp create \
-                          --resource-group $(RESOURCE_GROUP) \
-                          --plan $(APP_SERVICE_PLAN) \
-                          --name $(NOTIFICATION_WEBAPP_NAME) \
-                          --runtime "JAVA:17-java17"
-                        echo "==> Web App criada."
-                      else
-                        echo "==> Web App já existe, pulando."
-                      fi
 
                 - task: AzureWebApp@1
                   displayName: Deploy notification-service (Java 17)
