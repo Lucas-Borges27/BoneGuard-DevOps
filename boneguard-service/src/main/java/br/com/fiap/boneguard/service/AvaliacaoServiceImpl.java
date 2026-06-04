@@ -75,7 +75,7 @@ class AvaliacaoServiceImpl implements AvaliacaoService {
 
     @Override
     public Avaliacao buscarPorId(Long id) {
-        return avaliacaoRepository.findById(id)
+        return avaliacaoRepository.findByIdWithPaciente(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Avaliação", id));
     }
 

@@ -1,4 +1,3 @@
-// BoneGuard - GS DevOps 2026
 package br.com.fiap.boneguard.controller;
 
 import br.com.fiap.boneguard.dto.paciente.PacienteRequest;
