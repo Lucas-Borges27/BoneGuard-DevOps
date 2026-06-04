@@ -32,6 +32,25 @@ stages:
                   displayName: Download artifact boneguard-app
 
                 - task: AzureCLI@2
+                  displayName: Garantir Resource Group existe
+                  inputs:
+                    azureSubscription: $(AZURE_SUBSCRIPTION)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -e
+                      echo "==> Verificando/criando Resource Group: $(RESOURCE_GROUP)"
+                      RG_EXISTS=$(az group exists --name $(RESOURCE_GROUP))
+                      if [ "$RG_EXISTS" = "false" ]; then
+                        az group create \
+                          --name $(RESOURCE_GROUP) \
+                          --location $(LOCATION)
+                        echo "==> Resource Group criado."
+                      else
+                        echo "==> Resource Group já existe, pulando."
+                      fi
+
+                - task: AzureCLI@2
                   displayName: Criar App Service Plan e Web App boneguard
                   inputs:
                     azureSubscription: $(AZURE_SUBSCRIPTION)
@@ -51,7 +70,8 @@ stages:
                           --name $(APP_SERVICE_PLAN) \
                           --resource-group $(RESOURCE_GROUP) \
                           --sku B1 \
-                          --is-linux
+                          --is-linux \
+                          --location $(LOCATION)
                         echo "==> Plan criado."
                       else
                         echo "==> Plan já existe, pulando."
